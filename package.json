@@ -1,0 +1,19 @@
+{
+  "name": "webxrdome",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@webxr-input-profiles/motion-controllers": "^1.0.0",
+    "three": "^0.170.0"
+  }
+}
