@@ -111,6 +111,7 @@ function createGeodesicDome() {
         wireframe: showEdges,
         clippingPlanes: [clippingPlane], // Применяем плоскость отсечения
         clipShadows: true, // Обрезка теней
+        flatShading: true, // Включаем плоское затенение (грани будут угловатыми)
     });
 
 
