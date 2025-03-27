@@ -111,8 +111,12 @@ function createGeodesicDome() {
         wireframe: showEdges,
         clippingPlanes: [clippingPlane], // Применяем плоскость отсечения
         clipShadows: true, // Обрезка теней
-        flatShading: true, // Включаем плоское затенение (грани будут угловатыми)
     });
+
+    // Включаем плоское затенение (грани будут угловатыми) только если не в режиме wireframe
+    if (!showEdges) {
+        material.flatShading = true;
+    }
 
 
     const dome = new THREE.Mesh(geometry, material);
