@@ -104,16 +104,6 @@ function createGeodesicDome() {
 
 function createGUI() {
     const gui = new GUI({ width: 400, title: 'Dome Params' });
-
-    // Перемещаем GUI в левый верхний угол (только для не-VR режима)
-    //gui.domElement.style.position = 'absolute';
-    //gui.domElement.style.top = '10px';
-    //gui.domElement.style.left = '10px';
-    //gui.domElement.style.right = ''; // Сбрасываем правое позиционирование
-    // Увеличиваем размер текста и элементов GUI
-    //gui.domElement.style.fontSize = '16px'; // Увеличиваем шрифт
-    //gui.domElement.style.lineHeight = '24px'; // Увеличиваем межстрочный интервал
-    //gui.domElement.style.fontWeight = 'bold'; // Делаем текст жирным
     gui.domElement.style.visibility = 'hidden';
 
     // Добавляем контролы
@@ -128,7 +118,7 @@ function createGUI() {
             domeParameters.polyhedronType = domeParameters.polyhedronType === "icosahedron" 
                 ? "octahedron" 
                 : "icosahedron";
-            toggleTypeController.name(`${domeParameters.polyhedronType}`); // Обновляем название
+            toggleTypeController.name(`${domeParameters.polyhedronType}`);
             updateDome();
         }
     }, 'toggleType').name(`${domeParameters.polyhedronType}`);
@@ -136,7 +126,7 @@ function createGUI() {
     const toggleWireframeController = gui.add({
         toggleWireframe: () => {
             domeParameters.showEdges = !domeParameters.showEdges;
-            toggleWireframeController.name(`wireframe (${domeParameters.showEdges ? 'ON' : 'OFF'})`); // Обновляем название
+            toggleWireframeController.name(`wireframe (${domeParameters.showEdges ? 'ON' : 'OFF'})`);
             updateDome();
         }
     }, 'toggleWireframe').name(`wireframe (${domeParameters.showEdges ? 'ON' : 'OFF'})`);
@@ -160,16 +150,47 @@ function createGUI() {
 
     // Преобразуем GUI в 3D объект с увеличенным масштабом
     const guiMesh = new HTMLMesh(gui.domElement);
-    guiMesh.scale.setScalar(5);
+    guiMesh.scale.setScalar(8);
+    guiMesh.material.transparent = true;  // Включаем прозрачность
+    guiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности (50%)
+    guiMesh.visible = false;
     group.add(guiMesh);
 
     const animationGuiMesh = new HTMLMesh(animationGui.domElement);
-    animationGuiMesh.scale.setScalar(5);
+    animationGuiMesh.scale.setScalar(8);
+    animationGuiMesh.material.transparent = true;  // Включаем прозрачность
+    animationGuiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности (50%)
+    animationGuiMesh.visible = false;
     group.add(animationGuiMesh);
+
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0);
+    const material = new THREE.MeshBasicMaterial({ 
+            color: 0x3366ff,
+            transparent: true,
+            opacity: 0.6
+        });
+            
+    const button = new THREE.Mesh(geometry, material);
+    button.userData.isInteractive = true;
+    button.addEventListener('click', () => {
+        const showUI = !guiMesh.visible;
+        guiMesh.visible = showUI;
+        animationGuiMesh.visible = showUI;
+        material.color.setHex(showUI ? 0x33ff33 : 0x3366ff);
+        
+        if (showUI) {
+            guiMesh.material.map.needsUpdate = true;
+            animationGuiMesh.material.map.needsUpdate = true;
+            console.log(guiMesh.material.map);
+        }
+    });
+    group.add(button);
+
 
     // Сохраняем ссылки для обновления текстур
     window.guiMesh = guiMesh;
     window.animationGuiMesh = animationGuiMesh;
+    window.button = button;
 }
 
 function updateDome() {
@@ -191,20 +212,24 @@ function onWindowResize() {
 function updateGuiPositionAndOrientation(isPresenting) {
     if (window.guiMesh || window.animationGuiMesh) {
         // Базовые смещения для GUI
-        const mainGuiOffset = isPresenting ? new THREE.Vector3(-2.6, 1.2, -2) : new THREE.Vector3(-2.6, 1.2, -3);
-        const secondaryGuiOffset = isPresenting ? new THREE.Vector3(-0.6, 1.2, -2) : new THREE.Vector3(-0.6, 1.2, -3);
+        const mainGuiOffset = isPresenting ? new THREE.Vector3(-1.7, 0, -2) : new THREE.Vector3(-1.7, 0, -3);
+        const secondaryGuiOffset = isPresenting ? new THREE.Vector3(1.7, 0, -2) : new THREE.Vector3(1.7, 0, -3);
+        const threeGuiOffset = isPresenting ? new THREE.Vector3(2.6, 1.2, -2) : new THREE.Vector3(2.6, 1.2, -3);
 
         // Применяем поворот камеры к смещениям
         mainGuiOffset.applyQuaternion(camera.quaternion);
         secondaryGuiOffset.applyQuaternion(camera.quaternion);
+        threeGuiOffset.applyQuaternion(camera.quaternion);
 
         // Устанавливаем позиции для каждого GUI
         window.guiMesh.position.copy(camera.position).add(mainGuiOffset);
         window.animationGuiMesh.position.copy(camera.position).add(secondaryGuiOffset);
+        window.button.position.copy(camera.position).add(threeGuiOffset);
 
         // Ориентируем GUI на камеру
         window.guiMesh.quaternion.copy(camera.quaternion);
         window.animationGuiMesh.quaternion.copy(camera.quaternion);
+        window.button.quaternion.copy(camera.quaternion);
 
         // Обновляем текстуры
         window.guiMesh.material.map.needsUpdate = true;
