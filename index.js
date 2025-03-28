@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VRButton } from 'VRButton';
 import { RGBELoader } from 'RGBELoader';
-
+import { XRControllerModelFactory } from 'XRControllerModelFactory';
 import { GUI } from 'GUI';
 import { InteractiveGroup } from 'InteractiveGroup';
 import { HTMLMesh } from 'HTMLMesh';
@@ -10,6 +10,8 @@ import { HTMLMesh } from 'HTMLMesh';
 let scene, camera, renderer, light;
 let currentObject = null;
 let clippingPlane;
+let controller1, controller2;
+let controllerGrip1, controllerGrip2
 
 const domeParameters = {
     radius: 2.5,
@@ -51,6 +53,28 @@ function initDome() {
     document.body.appendChild(renderer.domElement);
     document.body.appendChild(VRButton.createButton(renderer));
     window.addEventListener( 'resize', onWindowResize );
+
+    // Добавляем поддержку контроллеров
+    const geometry = new THREE.BufferGeometry();
+    geometry.setFromPoints( [ new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, - 5 ) ] );
+
+    controller1 = renderer.xr.getController( 0 );
+    controller1.add( new THREE.Line( geometry ) );
+    scene.add( controller1 );
+
+    controller2 = renderer.xr.getController( 1 );
+    controller2.add( new THREE.Line( geometry ) );
+    scene.add( controller2 );
+
+    const controllerModelFactory = new XRControllerModelFactory();
+
+    const controllerGrip1 = renderer.xr.getControllerGrip( 0 );
+    controllerGrip1.add( controllerModelFactory.createControllerModel( controllerGrip1 ) );
+    scene.add( controllerGrip1 );
+
+    const controllerGrip2 = renderer.xr.getControllerGrip( 1 );
+    controllerGrip2.add( controllerModelFactory.createControllerModel( controllerGrip2 ) );
+    scene.add( controllerGrip2 );
 
     // Добавляем источник света
     light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
@@ -146,6 +170,8 @@ function createGUI() {
     // Создаём интерактивную группу для GUI в VR
     const group = new InteractiveGroup();
     group.listenToPointerEvents(renderer, camera);
+    group.listenToXRControllerEvents( controller1 );
+    group.listenToXRControllerEvents( controller2 );
     scene.add(group);
 
     // Преобразуем GUI в 3D объект с увеличенным масштабом
@@ -181,7 +207,6 @@ function createGUI() {
         if (showUI) {
             guiMesh.material.map.needsUpdate = true;
             animationGuiMesh.material.map.needsUpdate = true;
-            console.log(guiMesh.material.map);
         }
     });
     group.add(button);
