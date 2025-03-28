@@ -1,27 +1,32 @@
-// http-server .
-// Импорт библиотек и модулей
-//import * as THREE from './node_modules/three/build/three.module.js'; // Основная библиотека Three.js для работы с 3D
-//import { VRButton } from './node_modules/three/examples/jsm/webxr/VRButton.js'; // Модуль для добавления VR-функционала
-//import { RGBELoader } from './node_modules/three/examples/jsm/loaders/RGBELoader.js'
-
 import * as THREE from 'three';
 import { VRButton } from 'VRButton';
 import { RGBELoader } from 'RGBELoader';
 
+import { GUI } from 'GUI';
+import { InteractiveGroup } from 'InteractiveGroup';
+import { HTMLMesh } from 'HTMLMesh';
 
 // Объявление глобальных переменных
-let scene, camera, renderer, light; // Основные компоненты Three.js
-let currentObject = null; // Переменная для хранения текущего объекта купола
-let radius = 1.5; //радиус
-let subdivisions = 2;  //детализация
-let polyhedronType = "icosahedron"; // тип купола
-let clippingPlane; // Переменная для хранения плоскости отсечения
-let clippingPlaneY = 0; // Положение плоскости отсечения по умолчанию
-let showEdges = false; //Отображение только граней
+let scene, camera, renderer, light;
+let currentObject = null;
+let clippingPlane;
 
-/**
- * Инициализация сцены, камеры, рендерера и VR-функционала.
- */
+const domeParameters = {
+    radius: 2.5,
+    subdivisions: 2,
+    polyhedronType: "icosahedron",
+    clippingPlaneY: 0,
+    showEdges: false
+};
+
+const animationParameters = {
+    roughness: 0,
+    metalness: 0.1,
+    rotationSpeed: 0.01,
+    opacity: 1,
+    color: "#a90ee1"
+};
+
 function initDome() {
     // Создаём сцену
     scene = new THREE.Scene();
@@ -34,225 +39,192 @@ function initDome() {
         scene.environment = texture; // Используем для окружения
     });
 
-    // Создаём камеру с перспективной проекцией
-    camera = new THREE.PerspectiveCamera(
-        60, // Угол обзора
-        window.innerWidth / window.innerHeight, // Соотношение сторон
-        0.1, // Ближняя плоскость отсечения
-        100 // Дальняя плоскость отсечения
-    );
+    // Создаём камеру
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 1.7, 2);
 
-    // Создаём WebGLRenderer для отрисовки сцены
-    renderer = new THREE.WebGLRenderer({ antialias: true }); // Включаем сглаживание
-    renderer.setSize(window.innerWidth, window.innerHeight); // Устанавливаем размер рендерера
-    renderer.xr.enabled = true; // Включаем поддержку VR
-    renderer.localClippingEnabled = true; // Включает обработку отсечения сферы
-    document.body.appendChild(renderer.domElement); // Добавляем канвас рендерера в DOM
-    document.body.appendChild(VRButton.createButton(renderer)); // Добавляем кнопку "Enter VR" для включения VR-режима
+    // Создаём рендерер
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.localClippingEnabled = true;
+    document.body.appendChild(renderer.domElement);
+    document.body.appendChild(VRButton.createButton(renderer));
+    window.addEventListener( 'resize', onWindowResize );
 
     // Добавляем источник света
-    light = new THREE.HemisphereLight(0xffffff, 0x444444, 1); // Полусферический свет
+    light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
     scene.add(light);
 
-    // Устанавливаем позицию камеры
-    camera.position.y = 1.7; // Отодвигаем камеру назад, чтобы видеть сцену
-    camera.position.z = 2; // Отодвигаем камеру назад, чтобы видеть сцену
+    // Создаём GUI
+    createGUI();
 
     // Создаём и добавляем начальный объект купола
     updateDome();
-
-    // Создаём элементы управления для VR
-    createVRControls();
 
     // Запускаем анимацию
     animate();
 }
 
-
-
-/**
- * Создаёт геодезический купол с заданными параметрами.
- * @returns {THREE.Mesh} - Сгенерированный 3D-объект купола.
- */
 function createGeodesicDome() {
     let geometry;
 
-    // Выбор типа многогранника на основе параметра polyhedronType
-    if (polyhedronType === "icosahedron") {
-        geometry = new THREE.IcosahedronGeometry(radius, subdivisions);
-    } else if (polyhedronType === "octahedron") {
-        geometry = new THREE.OctahedronGeometry(radius, subdivisions);
+    if (domeParameters.polyhedronType === "icosahedron") {
+        geometry = new THREE.IcosahedronGeometry(domeParameters.radius, domeParameters.subdivisions);
     } else {
-        console.error("Invalid polyhedron type");
+        geometry = new THREE.OctahedronGeometry(domeParameters.radius, domeParameters.subdivisions);
     }
 
     // Создаём или обновляем плоскость отсечения
     if (!clippingPlane) {
-        clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), clippingPlaneY);
+        clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), domeParameters.clippingPlaneY);
     } else {
-        clippingPlane.constant = clippingPlaneY; // Обновляем положение плоскости отсечения
+        clippingPlane.constant = domeParameters.clippingPlaneY;
     }
-    
-    // Создаём материал с применением плоскости отсечения
-    /*
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x0077ff, // Цвет купола
-        wireframe: true, // Показываем только каркас
-        wireframe: showEdges,
-        clippingPlanes: [clippingPlane], // Применяем плоскость отсечения
-        clipShadows: true, // Обрезка теней
-    });*/
     const material = new THREE.MeshPhysicalMaterial({
-        transmission: 1.0, 
-        roughness: 0, 
-        metalness: 0.25, 
-        thickness: 0.5, 
+        color: new THREE.Color(animationParameters.color),     
+        roughness: animationParameters.roughness,
+        metalness: animationParameters.metalness,
+        opacity: animationParameters.opacity,
         side: THREE.DoubleSide,
-        wireframe: showEdges,
-        clippingPlanes: [clippingPlane], // Применяем плоскость отсечения
-        clipShadows: true, // Обрезка теней
+        wireframe: domeParameters.showEdges,
+        clippingPlanes: [clippingPlane],
+        transparent: true,
+        clipShadows: true,
     });
 
-    // Включаем плоское затенение (грани будут угловатыми) только если не в режиме wireframe
-    if (!showEdges) {
+    if (!domeParameters.showEdges) {
         material.flatShading = true;
     }
 
-
     const dome = new THREE.Mesh(geometry, material);
-    dome.position.z = -5; // Перемещаем купол дальше от камеры
+    dome.position.z = -5;
     return dome;
 }
 
-/**
- * Создаёт элементы управления для изменения параметров купола, включая отсечение.
- */
-function createVRControls() {
-    // Определяем материалы для кнопок
-    const buttonMaterial1 = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Красная кнопка
-    const buttonMaterial2 = new THREE.MeshBasicMaterial({ color: 0x0606ff }); // Синяя кнопка
-    const buttonMaterial3 = new THREE.MeshBasicMaterial({ color: 0x06ff1f }); // Зелёная кнопка
+function createGUI() {
+    const gui = new GUI({ width: 400, title: 'Dome Params' });
 
-    // Геометрия кнопок
-    const buttonGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+    // Перемещаем GUI в левый верхний угол (только для не-VR режима)
+    //gui.domElement.style.position = 'absolute';
+    //gui.domElement.style.top = '10px';
+    //gui.domElement.style.left = '10px';
+    //gui.domElement.style.right = ''; // Сбрасываем правое позиционирование
+    // Увеличиваем размер текста и элементов GUI
+    //gui.domElement.style.fontSize = '16px'; // Увеличиваем шрифт
+    //gui.domElement.style.lineHeight = '24px'; // Увеличиваем межстрочный интервал
+    //gui.domElement.style.fontWeight = 'bold'; // Делаем текст жирным
+    gui.domElement.style.visibility = 'hidden';
 
-    // Создаём кнопки для изменения параметров
-    const increaseRadiusButton = new THREE.Mesh(buttonGeometry, buttonMaterial1);
-    increaseRadiusButton.position.set(-5, 3, -5); // Устанавливаем позицию кнопки
-    scene.add(increaseRadiusButton);
-
-    const decreaseRadiusButton = new THREE.Mesh(buttonGeometry, buttonMaterial1);
-    decreaseRadiusButton.position.set(-4.6, 3, -5);
-    scene.add(decreaseRadiusButton);
-
-    const increaseSubdivisionsButton = new THREE.Mesh(buttonGeometry, buttonMaterial2);
-    increaseSubdivisionsButton.position.set(-4.2, 3, -5);
-    scene.add(increaseSubdivisionsButton);
-
-    const decreaseSubdivisionsButton = new THREE.Mesh(buttonGeometry, buttonMaterial2);
-    decreaseSubdivisionsButton.position.set(-3.8, 3, -5);
-    scene.add(decreaseSubdivisionsButton);
-
-    const polyhedronTypeButton = new THREE.Mesh(buttonGeometry, buttonMaterial3);
-    polyhedronTypeButton.position.set(-3.4, 3, -5);
-    scene.add(polyhedronTypeButton);
-
-    // Кнопка увеличения отсечения
-    const increaseClippingButton = new THREE.Mesh(buttonGeometry, buttonMaterial1);
-    increaseClippingButton.position.set(-3.0, 3, -5);
-    scene.add(increaseClippingButton);
-
-    // Кнопка уменьшения отсечения
-    const decreaseClippingButton = new THREE.Mesh(buttonGeometry, buttonMaterial1);
-    decreaseClippingButton.position.set(-2.6, 3, -5);
-    scene.add(decreaseClippingButton);
-
-    // Кнопка изменения отрисовки (только грани)
-    const showEdgesButton = new THREE.Mesh(buttonGeometry, buttonMaterial3);
-    showEdgesButton.position.set(-2.2, 3, -5);
-    scene.add(showEdgesButton);
-
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function onPointerMove(event) {
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    }
-
-    function onPointerDown() {
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([
-            increaseRadiusButton,
-            decreaseRadiusButton,
-            increaseSubdivisionsButton,
-            decreaseSubdivisionsButton,
-            polyhedronTypeButton,
-            increaseClippingButton, 
-            decreaseClippingButton,
-            showEdgesButton
-        ]);
-
-        if (intersects.length > 0) {
-            const clickedObject = intersects[0].object;
-
-            if (clickedObject === increaseClippingButton) {
-                clippingPlaneY = Math.min(clippingPlaneY + 0.1, radius); // Поднимаем плоскость
-            } else if (clickedObject === decreaseClippingButton) {
-                clippingPlaneY = Math.max(clippingPlaneY - 0.1, -radius); // Опускаем плоскость
-            }  else if (clickedObject === increaseRadiusButton) {
-                radius = Math.min(radius + 0.1, 5);
-            } else if (clickedObject === decreaseRadiusButton) {
-                radius = Math.max(radius - 0.1, 0.1);
-            } else if (clickedObject === increaseSubdivisionsButton) {
-                subdivisions = Math.min(subdivisions + 1, 30);
-            } else if (clickedObject === decreaseSubdivisionsButton) {
-                subdivisions = Math.max(subdivisions - 1, 0);
-            } else if (clickedObject === polyhedronTypeButton) {
-                polyhedronType = (polyhedronType === "icosahedron") ? "octahedron" : "icosahedron";
-            } else if (clickedObject === showEdgesButton) {
-                showEdges = (showEdges === true) ? false : true;
-            }
-
-            updateDome(); // Обновляем купол с новыми параметрами
+    // Добавляем контролы
+    const controllers = [
+        gui.add(domeParameters, 'radius', 0.1, 5, 0.1).name('Radius').onChange(updateDome),
+        gui.add(domeParameters, 'subdivisions', 0, 30, 1).name('Subdivisions').onChange(updateDome),
+        gui.add(domeParameters, 'clippingPlaneY', -5, 5, 0.1).name('Clipping Plane').onChange(updateDome)
+    ];
+    
+    const toggleTypeController = gui.add({ 
+        toggleType: () => {
+            domeParameters.polyhedronType = domeParameters.polyhedronType === "icosahedron" 
+                ? "octahedron" 
+                : "icosahedron";
+            toggleTypeController.name(`${domeParameters.polyhedronType}`); // Обновляем название
+            updateDome();
         }
-    }
+    }, 'toggleType').name(`${domeParameters.polyhedronType}`);
+    
+    const toggleWireframeController = gui.add({
+        toggleWireframe: () => {
+            domeParameters.showEdges = !domeParameters.showEdges;
+            toggleWireframeController.name(`wireframe (${domeParameters.showEdges ? 'ON' : 'OFF'})`); // Обновляем название
+            updateDome();
+        }
+    }, 'toggleWireframe').name(`wireframe (${domeParameters.showEdges ? 'ON' : 'OFF'})`);
+    
+    controllers.push(toggleTypeController, toggleWireframeController);
+    
+    // Создаём вторую панель GUI для анимации
+    const animationGui = new GUI({ width: 400, title: 'Dome Animation' });
+    animationGui.domElement.style.visibility = 'hidden';
+    
+    animationGui.add(animationParameters, 'rotationSpeed', 0, 1, 0.01).name('Rotation Speed');
+    animationGui.add(animationParameters, 'roughness', 0, 1, 0.01).name('Roughness').onChange(updateDome);
+    animationGui.add(animationParameters, 'metalness', 0, 1, 0.01).name('Metalness').onChange(updateDome);
+    animationGui.add(animationParameters, 'opacity', 0, 1, 0.01).name('Opacity').onChange(updateDome);
+    animationGui.addColor(animationParameters, 'color').name('Dome Color').onChange(updateDome);
+    
+    // Создаём интерактивную группу для GUI в VR
+    const group = new InteractiveGroup();
+    group.listenToPointerEvents(renderer, camera);
+    scene.add(group);
 
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerdown', onPointerDown);
+    // Преобразуем GUI в 3D объект с увеличенным масштабом
+    const guiMesh = new HTMLMesh(gui.domElement);
+    guiMesh.scale.setScalar(5);
+    group.add(guiMesh);
+
+    const animationGuiMesh = new HTMLMesh(animationGui.domElement);
+    animationGuiMesh.scale.setScalar(5);
+    group.add(animationGuiMesh);
+
+    // Сохраняем ссылки для обновления текстур
+    window.guiMesh = guiMesh;
+    window.animationGuiMesh = animationGuiMesh;
 }
 
-/**
- * Обновляет купол в сцене с новыми параметрами.
- */
 function updateDome() {
-    removeObject(currentObject); // Удаляем текущий объект
-    currentObject = createGeodesicDome(); // Создаём новый объект
-    scene.add(currentObject); // Добавляем объект в сцену
-    console.log(currentObject);
+    if (currentObject) {
+        scene.remove(currentObject);
+        currentObject.geometry.dispose();
+        currentObject.material.dispose();
+    }
+    currentObject = createGeodesicDome();
+    scene.add(currentObject);
 }
 
-/**
- * Удаляет объект из сцены и освобождает ресурсы.
- * @param {THREE.Mesh} object - Объект, который нужно удалить.
- */
-function removeObject(object) {
-    if (object) {
-        scene.remove(object); // Удаляем объект из сцены
-        object.geometry.dispose(); // Освобождаем геометрию
-        object.material.dispose(); // Освобождаем материал
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize( window.innerWidth, window.innerHeight );
+}
+
+function updateGuiPositionAndOrientation(isPresenting) {
+    if (window.guiMesh || window.animationGuiMesh) {
+        // Базовые смещения для GUI
+        const mainGuiOffset = isPresenting ? new THREE.Vector3(-2.6, 1.2, -2) : new THREE.Vector3(-2.6, 1.2, -3);
+        const secondaryGuiOffset = isPresenting ? new THREE.Vector3(-0.6, 1.2, -2) : new THREE.Vector3(-0.6, 1.2, -3);
+
+        // Применяем поворот камеры к смещениям
+        mainGuiOffset.applyQuaternion(camera.quaternion);
+        secondaryGuiOffset.applyQuaternion(camera.quaternion);
+
+        // Устанавливаем позиции для каждого GUI
+        window.guiMesh.position.copy(camera.position).add(mainGuiOffset);
+        window.animationGuiMesh.position.copy(camera.position).add(secondaryGuiOffset);
+
+        // Ориентируем GUI на камеру
+        window.guiMesh.quaternion.copy(camera.quaternion);
+        window.animationGuiMesh.quaternion.copy(camera.quaternion);
+
+        // Обновляем текстуры
+        window.guiMesh.material.map.needsUpdate = true;
+        window.animationGuiMesh.material.map.needsUpdate = true;
     }
 }
 
-/**
- * Главная функция анимации.
- */
 function animate() {
     renderer.setAnimationLoop(() => {
         if (currentObject) {
-            currentObject.rotation.y += 0.001; // Вращаем объект для наглядности
+            currentObject.rotation.y += animationParameters.rotationSpeed * 0.01;
         }
-        renderer.render(scene, camera); // Рендерим сцену
+        if (renderer.xr.isPresenting) {
+            // Обновляем позицию GUI, если XR активен
+            updateGuiPositionAndOrientation(true);
+        } else {
+            // Обновляем позицию GUI, если XR не активен
+            updateGuiPositionAndOrientation(false);
+        }
+        renderer.render(scene, camera);
     });
 }
 
