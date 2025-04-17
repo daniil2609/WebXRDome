@@ -178,15 +178,17 @@ function createGUI() {
     const guiMesh = new HTMLMesh(gui.domElement);
     guiMesh.scale.setScalar(8);
     guiMesh.material.transparent = true;  // Включаем прозрачность
-    guiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности (50%)
+    guiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности
     guiMesh.visible = false;
+    guiMesh.raycast = () => {}; // Полностью убираем из обработки событий
     group.add(guiMesh);
 
     const animationGuiMesh = new HTMLMesh(animationGui.domElement);
     animationGuiMesh.scale.setScalar(8);
     animationGuiMesh.material.transparent = true;  // Включаем прозрачность
-    animationGuiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности (50%)
+    animationGuiMesh.material.opacity = 0.7;      // Устанавливаем уровень прозрачности
     animationGuiMesh.visible = false;
+    animationGuiMesh.raycast = () => {};
     group.add(animationGuiMesh);
 
     const geometry = new THREE.BoxGeometry(0.5, 0.5, 0);
@@ -207,6 +209,12 @@ function createGUI() {
         if (showUI) {
             guiMesh.material.map.needsUpdate = true;
             animationGuiMesh.material.map.needsUpdate = true;
+            guiMesh.raycast = THREE.Mesh.prototype.raycast;
+            animationGuiMesh.raycast = THREE.Mesh.prototype.raycast;
+        }
+        if (!showUI) {
+            guiMesh.raycast = () => {};
+            animationGuiMesh.raycast = () => {};
         }
     });
     group.add(button);
